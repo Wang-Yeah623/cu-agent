@@ -13,6 +13,7 @@ import { SecurityGate } from "../registry";
 import { CodexAdapter, TerminalAdapter, FileSystemAdapter } from "../executor";
 import { TASK_EXECUTION_TIMEOUT_MS, USER_INPUT_TIMEOUT_MS } from "../core/constants";
 import { PluginMethod } from "../core/protocol";
+import { StateMachine } from "./state-machine";
 import * as path from "path";
 
 export class ExecutionLoop extends EventEmitter {
@@ -24,6 +25,9 @@ export class ExecutionLoop extends EventEmitter {
   private isPaused: boolean = false;
   private projectCreated: boolean = false;
   private latestSnapshot: ProgressSnapshot | undefined;
+  private readonly sm = new StateMachine();
+  private lastActionOutput: string = "";
+  private lastActionResult: string = "";
 
   private hermes: HermesClient;
   private taskPlanner: TaskPlanner;
@@ -64,6 +68,9 @@ export class ExecutionLoop extends EventEmitter {
       createdAt: now(),
       updatedAt: now(),
     };
+    this.sm.reset();
+    this.lastActionOutput = "";
+    this.lastActionResult = "";
     this.projectCreated = true;
     return this.project;
   }
@@ -73,17 +80,17 @@ export class ExecutionLoop extends EventEmitter {
     if (this.isRunning) throw new Error("Already running");
     this.isRunning = true;
     this.isPaused = false;
-    this.project.status = ProjectStatus.PLANNING;
+    this.setStatus(ProjectStatus.PLANNING);
 
     try {
       this.emit("log", { level: "info", message: "Planning tasks..." });
       const plan = await this.taskPlanner.plan(this.project.requirement);
       this.tasks = plan.tasks.map(t => ({ ...t, projectId: this.project.id }));
-      this.project.status = ProjectStatus.EXECUTING;
+      this.setStatus(ProjectStatus.EXECUTING);
       this.emit("log", { level: "info", message: `Plan done: ${this.tasks.length} tasks` });
       await this.executionLoop();
     } catch (error) {
-      this.project.status = ProjectStatus.FAILED;
+      this.setStatus(ProjectStatus.FAILED);
       this.emit("loop:error", error instanceof Error ? error : new Error(String(error)));
     } finally {
       this.isRunning = false;
@@ -92,39 +99,39 @@ export class ExecutionLoop extends EventEmitter {
 
   public pause(): void {
     this.isPaused = true;
-    this.project.status = ProjectStatus.PAUSED;
+    this.setStatus(ProjectStatus.PAUSED);
     this.emit("loop:pause");
   }
 
   public resume(): void {
     if (!this.isPaused) return;
     this.isPaused = false;
-    this.project.status = ProjectStatus.EXECUTING;
+    this.setStatus(ProjectStatus.EXECUTING);
     this.emit("loop:resume");
   }
 
   public stop(): void {
     this.isRunning = false;
     this.isPaused = false;
-    this.project.status = ProjectStatus.IDLE;
+    this.setStatus(ProjectStatus.IDLE);
   }
 
   public approvePendingRequest(): void {
     const pending = this.securityGate.getPendingApprovals();
     if (pending.length > 0) {
       this.securityGate.resolveApproval(pending[0].id, true);
-      this.project.status = ProjectStatus.EXECUTING;
+      this.setStatus(ProjectStatus.EXECUTING);
     }
   }
 
   public submitUserChoice(choice: string): void {
     this.emit("log", { level: "info", message: `User chose: ${choice}` });
-    this.project.status = ProjectStatus.EXECUTING;
+    this.setStatus(ProjectStatus.EXECUTING);
   }
 
   public async handleUserFeedback(feedback: string): Promise<void> {
     await this.replanTasks(feedback);
-    this.project.status = ProjectStatus.EXECUTING;
+    this.setStatus(ProjectStatus.EXECUTING);
   }
 
   public getCurrentProgress(): ProgressSnapshot | undefined {
@@ -148,6 +155,22 @@ export class ExecutionLoop extends EventEmitter {
       this.project.status !== ProjectStatus.FAILED;
   }
 
+  /**
+   * 通过状态机切换项目状态：合法转换走状态机校验；
+   * 非常规转换记一条 warn 日志后强制同步（容错，绝不阻断主流程）。
+   */
+  private setStatus(to: ProjectStatus, reason?: string): void {
+    if (this.sm.state !== to) {
+      try {
+        this.sm.transitionTo(to, reason);
+      } catch (e) {
+        this.emit("log", { level: "warn", message: `状态切换 ${this.sm.state} → ${to} 非常规：${(e as Error).message}` });
+        this.sm.force(to, reason);
+      }
+    }
+    this.project.status = this.sm.state;
+  }
+
   // ===== Internal: Execution Loop =====
 
   private async executionLoop(): Promise<void> {
@@ -164,14 +187,14 @@ export class ExecutionLoop extends EventEmitter {
 
       if (snapshot && snapshot.deviationFlag && snapshot.deviationLevel !== "none") {
         this.emit("user:question", `Deviation detected: ${snapshot.summary}. Adjust direction?`);
-        this.project.status = ProjectStatus.WAITING_USER_INPUT;
+        this.setStatus(ProjectStatus.WAITING_USER_INPUT);
         await this.waitWhilePausedOrWaiting();
         if (!this.isRunning) break;
-        this.project.status = ProjectStatus.EXECUTING;
+        this.setStatus(ProjectStatus.EXECUTING);
       }
     }
     if (this.isRunning && this.currentTaskIndex >= this.tasks.length - 1) {
-      this.project.status = ProjectStatus.COMPLETED;
+      this.setStatus(ProjectStatus.COMPLETED);
       this.emit("loop:complete", this.project);
     }
   }
@@ -247,7 +270,7 @@ Project root: ${this.project.outputDir}`;
         action.type, action.payload, check.reason ?? "approval needed"
       );
       this.emit("user:approval", approval.id, approval.description);
-      this.project.status = ProjectStatus.WAITING_APPROVAL;
+      this.setStatus(ProjectStatus.WAITING_APPROVAL);
       await this.waitWhilePausedOrWaiting();
       if (!this.isRunning || approval.status === "rejected") return;
     }
@@ -264,6 +287,8 @@ Project root: ${this.project.outputDir}`;
             await this.codex.call(PluginMethod.FILE_CREATE, { path: filePath, content, overwrite: true });
           } else {
             const result = await this.fileSystem.createFile(filePath, content, true);
+            this.lastActionOutput = `Created ${result.path} (${result.size}B)`;
+            this.lastActionResult = "ok";
             this.emit("log", { level: "info", message: `Created: ${result.path} (${result.size}B)` });
           }
           break;
@@ -278,6 +303,8 @@ Project root: ${this.project.outputDir}`;
             await this.codex.call(PluginMethod.FILE_EDIT, { path: filePath, oldText, newText });
           } else {
             const result = await this.fileSystem.editFile(filePath, oldText, newText);
+            this.lastActionOutput = `Edited ${result.path}`;
+            this.lastActionResult = "ok";
             this.emit("log", { level: "info", message: `Edited: ${result.path}` });
           }
           break;
@@ -291,6 +318,8 @@ Project root: ${this.project.outputDir}`;
           } else {
             const result = await this.terminal.exec(command, { cwd });
             const output = (result.output || "").slice(0, 300);
+            this.lastActionOutput = (result.output || result.error || "").slice(0, 1000);
+            this.lastActionResult = `exit=${result.exitCode}${result.success ? "" : " (failed)"}`;
             this.emit("log", { level: result.success ? "info" : "warn",
               message: `Cmd: ${command.slice(0, 80)} [exit=${result.exitCode}] ${output}` });
           }
@@ -314,7 +343,7 @@ Project root: ${this.project.outputDir}`;
       requirement: this.project.requirement,
       completedTasks: this.completedTasks,
       allTasks: this.tasks,
-      fileTree, lastActionOutput: "", lastActionResult: "",
+      fileTree, lastActionOutput: this.lastActionOutput, lastActionResult: this.lastActionResult,
     });
     this.emit("progress:update", snapshot);
     this.latestSnapshot = snapshot;
@@ -365,7 +394,7 @@ Project root: ${this.project.outputDir}`;
             this.securityGate.resolveApproval(p.id, false);
           }
           this.isRunning = false;
-          this.project.status = ProjectStatus.PAUSED;
+          this.setStatus(ProjectStatus.PAUSED);
           resolve();
         }
       }, 500);

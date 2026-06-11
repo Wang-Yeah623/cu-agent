@@ -21,20 +21,12 @@ export type MessageHandler = (message: WeChatMessage) => Promise<void>;
  */
 export class MessageRouter {
   private intentParser: IntentParser;
-  private executionLoop: ExecutionLoop | null = null;
   private bridge: ClawbotBridge;
   private activeUsers: Map<string, ExecutionLoop> = new Map();
 
   constructor(intentParser: IntentParser, bridge: ClawbotBridge) {
     this.intentParser = intentParser;
     this.bridge = bridge;
-  }
-
-  /**
-   * 注册执行循环器（在创建项目时调用）
-   */
-  public setExecutionLoop(loop: ExecutionLoop): void {
-    this.executionLoop = loop;
   }
 
   /**

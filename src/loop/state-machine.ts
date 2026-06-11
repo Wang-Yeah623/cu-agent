@@ -51,18 +51,21 @@ export class StateMachine {
       ProjectStatus.PAUSED,
       ProjectStatus.COMPLETED,
       ProjectStatus.FAILED,
+      ProjectStatus.IDLE,
     ]);
 
     this.transitions.set(ProjectStatus.WAITING_APPROVAL, [
       ProjectStatus.EXECUTING,
       ProjectStatus.FAILED,
       ProjectStatus.PAUSED,
+      ProjectStatus.IDLE,
     ]);
 
     this.transitions.set(ProjectStatus.WAITING_USER_INPUT, [
       ProjectStatus.EXECUTING,
       ProjectStatus.PAUSED,
       ProjectStatus.FAILED,
+      ProjectStatus.IDLE,
     ]);
 
     this.transitions.set(ProjectStatus.PAUSED, [
@@ -151,6 +154,15 @@ export class StateMachine {
     const from = this.current;
     this.current = ProjectStatus.IDLE;
     this.notifyListeners(from, ProjectStatus.IDLE, "reset");
+  }
+
+  /**
+   * 强制切换状态（跳过合法性校验）。仅用于容错兜底，正常流程请用 transitionTo。
+   */
+  public force(state: ProjectStatus, reason?: string): void {
+    const from = this.current;
+    this.current = state;
+    this.notifyListeners(from, state, reason ?? "forced");
   }
 
   private notifyListeners(
