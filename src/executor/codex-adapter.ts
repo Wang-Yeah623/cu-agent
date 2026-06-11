@@ -3,7 +3,7 @@
  */
 import { EventEmitter } from "events";
 import { PluginMessage, PluginMessageType, PluginMethod, PluginRequest, PluginResponse, PluginError } from "../core/protocol";
-import { PLUGIN_DEFAULT_TIMEOUT_MS, PLUGIN_HEARTBEAT_INTERVAL_MS, PLUGIN_HEARTBEAT_TIMEOUT_MS, PLUGIN_RECONNECT_INTERVAL_MS, PLUGIN_MAX_RECONNECT_ATTEMPTS } from "../core/constants";
+import { PLUGIN_DEFAULT_TIMEOUT_MS, PLUGIN_HEARTBEAT_INTERVAL_MS, PLUGIN_HEARTBEAT_TIMEOUT_MS, PLUGIN_RECONNECT_INTERVAL_MS, PLUGIN_MAX_RECONNECT_ATTEMPTS } from "../core/protocol";
 
 const WebSocket = require("ws");
 

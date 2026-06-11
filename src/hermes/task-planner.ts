@@ -84,7 +84,7 @@ export class TaskPlanner {
       const jsonStr = jsonMatch ? jsonMatch[1] : response.content;
       const parsed = JSON.parse(jsonStr);
 
-      return this.normalizePlan(parsed);
+      return this.normalizePlan(parsed, requirement);
     } catch {
       // 如果 JSON 解析失败，返回一个基础的计划
       return this.createFallbackPlan(requirement);
@@ -94,7 +94,7 @@ export class TaskPlanner {
   /**
    * 将原始解析结果规范化为 TaskPlan
    */
-  private normalizePlan(raw: any): TaskPlan {
+  private normalizePlan(raw: any, requirement: string): TaskPlan {
     const tasks: SubTask[] = (raw.tasks ?? []).map((t: any, i: number) => ({
       id: generateId(),
       projectId: "", // 由调用方填充

@@ -38,14 +38,16 @@ export interface HostConfig {
     apiEndpoint: string;
     apiKey?: string;
     modelName?: string;
+    temperature?: number;
   };
   wechat: ClawbotConfig;
   codex: {
     host: string;
     port: number;
+    bindingKey?: string;
   };
   workspace: {
-    root: string;
+    projectsDir: string;
   };
   http?: {
     port: number;
@@ -73,29 +75,38 @@ export interface RuntimeContext {
  * 组装所有模块并启动服务。
  * 支持按需启动/停止，适合桌面应用嵌入。
  */
-export class CuAgentHost {
+export class CuAgentApp {
   private config: HostConfig;
   private context: RuntimeContext | null = null;
   private httpServer: http.Server | null = null;
   private running: boolean = false;
 
-  private constructor(config: HostConfig) {
+  public constructor(config: HostConfig) {
     this.config = config;
+  }
+
+  /**
+   * 校验必填配置（WeChat Webhook + Codex 绑定密钥）
+   */
+  public validateConfig(): boolean {
+    const hasWebhook = !!this.config.wechat.webhookUrl;
+    const hasBindingKey = !!this.config.codex.bindingKey;
+    return hasWebhook && hasBindingKey;
   }
 
   /**
    * 工厂方法：从配置文件加载
    */
-  public static async fromConfig(configPath?: string): Promise<CuAgentHost> {
+  public static async fromConfig(configPath?: string): Promise<CuAgentApp> {
     const config = await loadConfig(configPath);
-    return new CuAgentHost(config);
+    return new CuAgentApp(config);
   }
 
   /**
    * 工厂方法：直接传入配置
    */
-  public static fromConfigObject(config: HostConfig): CuAgentHost {
-    return new CuAgentHost(config);
+  public static fromConfigObject(config: HostConfig): CuAgentApp {
+    return new CuAgentApp(config);
   }
 
   /**
@@ -115,6 +126,7 @@ export class CuAgentHost {
         apiEndpoint: this.config.hermes.apiEndpoint,
         apiKey: this.config.hermes.apiKey,
         modelName: this.config.hermes.modelName,
+        temperature: this.config.hermes.temperature,
       });
 
       // Step 2: 初始化 Hermes 子模块
@@ -125,14 +137,14 @@ export class CuAgentHost {
       // Step 3: 初始化插件注册表和安全门控
       const registry = new PluginRegistry();
       const securityGate = new SecurityGate();
-      securityGate.addAllowedPath(this.config.workspace.root);
+      securityGate.addAllowedPath(this.config.workspace.projectsDir);
 
       // Step 4: 初始化执行层
       const codexAdapter = new CodexAdapter(
         this.config.codex.host,
         this.config.codex.port
       );
-      const terminal = new TerminalAdapter(this.config.workspace.root);
+      const terminal = new TerminalAdapter(this.config.workspace.projectsDir);
       const fileSystem = new FileSystemAdapter();
 
       // Step 5: 初始化执行循环器
@@ -152,7 +164,7 @@ export class CuAgentHost {
 
       // Step 7: 注册项目请求处理器
       messageRouter.on("project:request", async (msg: any) => {
-        const project = await executionLoop.createProject(msg.content, this.config.workspace.root);
+        const project = await executionLoop.createProject(msg.content, this.config.workspace.projectsDir);
         if (project) {
           messageRouter.registerUser(msg.fromUser, executionLoop);
           await bridge.sendText(`✅ 项目「${project.name}」已创建，开始执行...`);
@@ -227,7 +239,7 @@ export class CuAgentHost {
 
       this.running = true;
       console.log(`[CuAgent] ${APP_NAME} 启动完成 🚀`);
-      console.log(`[CuAgent] 工作目录: ${this.config.workspace.root}`);
+      console.log(`[CuAgent] 工作目录: ${this.config.workspace.projectsDir}`);
       console.log(`[CuAgent] HTTP 端口: ${this.config.http?.port ?? 3456}`);
     } catch (error) {
       console.error("[CuAgent] 启动失败:", error);
@@ -395,7 +407,7 @@ async function loadConfig(configPath?: string): Promise<HostConfig> {
       port: 9876,
     },
     workspace: {
-      root: process.cwd(),
+      projectsDir: process.cwd(),
     },
     http: {
       port: 3456,

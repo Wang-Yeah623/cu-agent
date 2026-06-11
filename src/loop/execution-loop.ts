@@ -12,6 +12,7 @@ import { HermesClient, TaskPlanner, ProgressDetector } from "../hermes";
 import { SecurityGate } from "../registry";
 import { CodexAdapter, TerminalAdapter, FileSystemAdapter } from "../executor";
 import { TASK_EXECUTION_TIMEOUT_MS } from "../core/constants";
+import { PluginMethod } from "../core/protocol";
 
 export class ExecutionLoop extends EventEmitter {
   private project!: Project;
@@ -243,7 +244,7 @@ Project root: ${this.project.outputDir}`;
           const content = String(action.payload["content"] ?? "");
           if (!path) throw new Error("file.create: path is required");
           if (codexConnected) {
-            await this.codex.call("file.create", { path, content, overwrite: true });
+            await this.codex.call(PluginMethod.FILE_CREATE, { path, content, overwrite: true });
           } else {
             const result = await this.fileSystem.createFile(path, content, true);
             this.emit("log", { level: "info", message: `Created: ${result.path} (${result.size}B)` });
@@ -256,7 +257,7 @@ Project root: ${this.project.outputDir}`;
           const newText = String(action.payload["newText"] ?? "");
           if (!path) throw new Error("file.edit: path is required");
           if (codexConnected) {
-            await this.codex.call("file.edit", { path, oldText, newText });
+            await this.codex.call(PluginMethod.FILE_EDIT, { path, oldText, newText });
           } else {
             const result = await this.fileSystem.editFile(path, oldText, newText);
             this.emit("log", { level: "info", message: `Edited: ${result.path}` });
@@ -268,7 +269,7 @@ Project root: ${this.project.outputDir}`;
           const cwd = String(action.payload["cwd"] ?? this.project.outputDir);
           if (!command) throw new Error("terminal.exec: command is required");
           if (codexConnected) {
-            await this.codex.call("terminal.exec", { command, cwd });
+            await this.codex.call(PluginMethod.TERMINAL_EXEC, { command, cwd });
           } else {
             const result = await this.terminal.exec(command, { cwd });
             const output = (result.output || "").slice(0, 300);
