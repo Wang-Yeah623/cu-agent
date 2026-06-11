@@ -49,6 +49,16 @@ describe("SecurityGate", () => {
     expect(result.requiresApproval).toBe(true);
   });
 
+  it("blocks path traversal and sibling-prefix escapes", () => {
+    gate.addAllowedPath("C:\\projects\\app");
+    // ".." 穿越逃出沙箱
+    const escape = gate.checkFilePath("C:\\projects\\app\\..\\..\\Windows\\system32");
+    expect(escape.allowed).toBe(false);
+    // 兄弟目录前缀不应被误判为沙箱内部
+    const sibling = gate.checkFilePath("C:\\projects\\app-secret\\data");
+    expect(sibling.allowed).toBe(false);
+  });
+
   it("FILE_DELETE action always requires approval", () => {
     const result = gate.checkAction(ActionType.FILE_DELETE, { path: "test.ts" });
     expect(result.allowed).toBe(true);

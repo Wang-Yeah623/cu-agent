@@ -11,8 +11,9 @@ import { Project, SubTask, ProgressSnapshot, Action,
 import { HermesClient, TaskPlanner, ProgressDetector } from "../hermes";
 import { SecurityGate } from "../registry";
 import { CodexAdapter, TerminalAdapter, FileSystemAdapter } from "../executor";
-import { TASK_EXECUTION_TIMEOUT_MS } from "../core/constants";
+import { TASK_EXECUTION_TIMEOUT_MS, USER_INPUT_TIMEOUT_MS } from "../core/constants";
 import { PluginMethod } from "../core/protocol";
+import * as path from "path";
 
 export class ExecutionLoop extends EventEmitter {
   private project!: Project;
@@ -139,32 +140,43 @@ export class ExecutionLoop extends EventEmitter {
       currentTaskIndex: this.currentTaskIndex, isRunning: this.isRunning, isPaused: this.isPaused };
   }
 
+  /** 是否有一个正在进行（未结束）的项目 */
+  public isActive(): boolean {
+    return this.projectCreated &&
+      this.project.status !== ProjectStatus.IDLE &&
+      this.project.status !== ProjectStatus.COMPLETED &&
+      this.project.status !== ProjectStatus.FAILED;
+  }
+
   // ===== Internal: Execution Loop =====
 
   private async executionLoop(): Promise<void> {
     while (this.isRunning && this.currentTaskIndex < this.tasks.length - 1) {
       if (this.isPaused) await this.waitWhilePausedOrWaiting();
+      if (!this.isRunning) break;
       this.currentTaskIndex++;
       if (this.tasks[this.currentTaskIndex].status === TaskStatus.COMPLETED) continue;
 
       const task = this.tasks[this.currentTaskIndex];
-      await this.executeTask(task);
+      // executeTask 内部已做一次进度检测，复用其返回的快照（避免每个任务重复 LLM 调用）
+      const snapshot = await this.executeTask(task);
+      if (!this.isRunning) break;
 
-      const snapshot = await this.checkProgress();
-      if (snapshot.deviationFlag && snapshot.deviationLevel !== "none") {
+      if (snapshot && snapshot.deviationFlag && snapshot.deviationLevel !== "none") {
         this.emit("user:question", `Deviation detected: ${snapshot.summary}. Adjust direction?`);
         this.project.status = ProjectStatus.WAITING_USER_INPUT;
         await this.waitWhilePausedOrWaiting();
+        if (!this.isRunning) break;
         this.project.status = ProjectStatus.EXECUTING;
       }
     }
-    if (this.currentTaskIndex >= this.tasks.length - 1) {
+    if (this.isRunning && this.currentTaskIndex >= this.tasks.length - 1) {
       this.project.status = ProjectStatus.COMPLETED;
       this.emit("loop:complete", this.project);
     }
   }
 
-  private async executeTask(task: SubTask): Promise<void> {
+  private async executeTask(task: SubTask): Promise<ProgressSnapshot | undefined> {
     task.status = TaskStatus.EXECUTING;
     this.emit("task:start", task);
     this.emit("log", { level: "info", message: `Executing: ${task.name}` });
@@ -172,18 +184,22 @@ export class ExecutionLoop extends EventEmitter {
     try {
       const actions = await this.planActions(task);
       for (const action of actions) {
+        if (!this.isRunning) return undefined;
         if (this.isPaused) await this.waitWhilePausedOrWaiting();
         await this.executeAction(action, task);
       }
+      if (!this.isRunning) return undefined;
       task.status = TaskStatus.COMPLETED;
       this.completedTasks.push(task);
       const snap = await this.checkProgress();
       this.emit("task:complete", task, snap);
+      return snap;
     } catch (error) {
       task.status = TaskStatus.FAILED;
       const msg = error instanceof Error ? error.message : String(error);
       this.emit("task:fail", task, msg);
       this.emit("log", { level: "error", message: `Task failed: ${task.name} - ${msg}` });
+      return undefined;
     }
   }
 
@@ -233,41 +249,43 @@ Project root: ${this.project.outputDir}`;
       this.emit("user:approval", approval.id, approval.description);
       this.project.status = ProjectStatus.WAITING_APPROVAL;
       await this.waitWhilePausedOrWaiting();
-      if (approval.status === "rejected") return;
+      if (!this.isRunning || approval.status === "rejected") return;
     }
 
     try {
       const codexConnected = this.codex.isConnected();
       switch (action.type) {
         case ActionType.FILE_CREATE: {
-          const path = String(action.payload["path"] ?? "");
+          const rawPath = String(action.payload["path"] ?? "");
           const content = String(action.payload["content"] ?? "");
-          if (!path) throw new Error("file.create: path is required");
+          if (!rawPath) throw new Error("file.create: path is required");
+          const filePath = this.resolveAndCheckPath(rawPath);
           if (codexConnected) {
-            await this.codex.call(PluginMethod.FILE_CREATE, { path, content, overwrite: true });
+            await this.codex.call(PluginMethod.FILE_CREATE, { path: filePath, content, overwrite: true });
           } else {
-            const result = await this.fileSystem.createFile(path, content, true);
+            const result = await this.fileSystem.createFile(filePath, content, true);
             this.emit("log", { level: "info", message: `Created: ${result.path} (${result.size}B)` });
           }
           break;
         }
         case ActionType.FILE_EDIT: {
-          const path = String(action.payload["path"] ?? "");
+          const rawPath = String(action.payload["path"] ?? "");
           const oldText = String(action.payload["oldText"] ?? "");
           const newText = String(action.payload["newText"] ?? "");
-          if (!path) throw new Error("file.edit: path is required");
+          if (!rawPath) throw new Error("file.edit: path is required");
+          const filePath = this.resolveAndCheckPath(rawPath);
           if (codexConnected) {
-            await this.codex.call(PluginMethod.FILE_EDIT, { path, oldText, newText });
+            await this.codex.call(PluginMethod.FILE_EDIT, { path: filePath, oldText, newText });
           } else {
-            const result = await this.fileSystem.editFile(path, oldText, newText);
+            const result = await this.fileSystem.editFile(filePath, oldText, newText);
             this.emit("log", { level: "info", message: `Edited: ${result.path}` });
           }
           break;
         }
         case ActionType.TERMINAL_EXEC: {
           const command = String(action.payload["command"] ?? "");
-          const cwd = String(action.payload["cwd"] ?? this.project.outputDir);
           if (!command) throw new Error("terminal.exec: command is required");
+          const cwd = this.resolveAndCheckPath(String(action.payload["cwd"] ?? this.project.outputDir));
           if (codexConnected) {
             await this.codex.call(PluginMethod.TERMINAL_EXEC, { command, cwd });
           } else {
@@ -313,13 +331,43 @@ Project root: ${this.project.outputDir}`;
     this.emit("log", { level: "info", message: `Replan done: ${remainingTasks.length} remaining tasks` });
   }
 
-  private waitWhilePausedOrWaiting(): Promise<void> {
+  /**
+   * 把 LLM 给出的路径解析为绝对路径并做沙箱校验。
+   * 相对路径相对项目 outputDir 解析；越界则抛错（拦截执行）。
+   */
+  private resolveAndCheckPath(rawPath: string): string {
+    const abs = path.isAbsolute(rawPath)
+      ? path.resolve(rawPath)
+      : path.resolve(this.project.outputDir, rawPath);
+    const check = this.securityGate.checkFilePath(abs);
+    if (!check.allowed) {
+      throw new Error(`沙箱拦截：路径越界 ${abs}${check.reason ? "（" + check.reason + "）" : ""}`);
+    }
+    return abs;
+  }
+
+  private waitWhilePausedOrWaiting(timeoutMs: number = USER_INPUT_TIMEOUT_MS): Promise<void> {
     return new Promise(resolve => {
+      const start = Date.now();
       const check = setInterval(() => {
         const blocked = this.isPaused ||
           this.project.status === ProjectStatus.WAITING_APPROVAL ||
           this.project.status === ProjectStatus.WAITING_USER_INPUT;
-        if (!blocked) { clearInterval(check); resolve(); }
+        if (!blocked) { clearInterval(check); resolve(); return; }
+        if (Date.now() - start >= timeoutMs) {
+          clearInterval(check);
+          this.emit("log", {
+            level: "warn",
+            message: `等待用户响应超过 ${Math.round(timeoutMs / 60000)} 分钟，已自动停止当前项目。重新发需求可再次开始。`,
+          });
+          // 安全默认：超时即拒绝所有待审批操作，绝不放行未确认的动作
+          for (const p of this.securityGate.getPendingApprovals()) {
+            this.securityGate.resolveApproval(p.id, false);
+          }
+          this.isRunning = false;
+          this.project.status = ProjectStatus.PAUSED;
+          resolve();
+        }
       }, 500);
     });
   }

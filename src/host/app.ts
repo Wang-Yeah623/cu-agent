@@ -164,6 +164,11 @@ export class CuAgentApp {
 
       // Step 7: 注册项目请求处理器
       messageRouter.on("project:request", async (msg: any) => {
+        // 单活跃项目约束：已有项目在跑时，拒绝新需求，避免覆盖当前项目状态
+        if (executionLoop.isActive()) {
+          await bridge.sendText("⚠️ 已有一个项目在进行中，请先发「停」结束后再发新需求。");
+          return;
+        }
         const project = await executionLoop.createProject(msg.content, this.config.workspace.projectsDir);
         if (project) {
           messageRouter.registerUser(msg.fromUser, executionLoop);

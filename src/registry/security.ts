@@ -5,6 +5,7 @@
  * 检查维度：命令黑名单、操作白名单、文件路径沙箱、审批门控。
  */
 
+import * as path from "path";
 import { ActionType, ApprovalRequest, generateId, now } from "../core";
 import { DANGEROUS_COMMANDS, MAX_COMMAND_LENGTH } from "../core/constants";
 
@@ -79,21 +80,27 @@ export class SecurityGate {
   }
 
   /**
-   * 检查文件路径是否在沙箱内
+   * 检查文件路径是否在沙箱内。
+   * 解析为绝对路径后用 path.relative 判断包含关系，可正确拦截 ".." 路径穿越，
+   * 并避免裸前缀匹配把 "F:\work" 误判为包含 "F:\work-secret"。
    */
-  public checkFilePath(path: string): SecurityCheckResult {
+  public checkFilePath(targetPath: string): SecurityCheckResult {
     if (this.allowedPaths.length === 0) {
       // 沙箱未配置，默认允许但标记需要审批
       return { allowed: true, requiresApproval: true };
     }
 
-    const isAllowed = this.allowedPaths.some((allowed) =>
-      path.startsWith(allowed)
-    );
+    const resolvedTarget = path.resolve(targetPath);
+    const isAllowed = this.allowedPaths.some((allowed) => {
+      const resolvedAllowed = path.resolve(allowed);
+      const rel = path.relative(resolvedAllowed, resolvedTarget);
+      // rel 为空 = 同一目录；不以 ".." 开头且非绝对 = 在 allowed 内部
+      return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+    });
 
     return {
       allowed: isAllowed,
-      reason: isAllowed ? undefined : `Path is outside allowed sandbox: ${path}`,
+      reason: isAllowed ? undefined : `Path is outside allowed sandbox: ${resolvedTarget}`,
       requiresApproval: !isAllowed,
     };
   }
