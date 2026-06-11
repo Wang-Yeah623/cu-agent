@@ -1,0 +1,29 @@
+{
+  "name": "cu-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cu Agent — WeChat驱动的半自主编程Agent",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "@types/node": "^20.12.0",
+    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0"
+  },
+  "dependencies": {
+    "zod": "^3.22.0",
+    "ws": "^8.17.0",
+    "uuid": "^9.0.0"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "paths": {
+      "@cu-agent/core": ["./src/core"],
+      "@cu-agent/registry": ["./src/registry"],
+      "@cu-agent/hermes": ["./src/hermes"],
+      "@cu-agent/executor": ["./src/executor"],
+      "@cu-agent/loop": ["./src/loop"],
+      "@cu-agent/wechat": ["./src/wechat"],
+      "@cu-agent/host": ["./src/host"],
+      "@cu-agent/plugin-codex": ["./src/plugin-codex"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
