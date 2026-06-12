@@ -247,6 +247,14 @@ export class CuAgentApp {
         console.warn("[CuAgent] WeChat Clawbot 连接失败，请检查 webhook URL");
       }
 
+      // Step 8.5: 连接编辑器插件（VS Code / Codex）；连不上则退化为本地直接读写文件
+      try {
+        await codexAdapter.connect();
+        console.log(`[CuAgent] 已连接编辑器插件 ${this.config.codex.host}:${this.config.codex.port}`);
+      } catch {
+        console.warn(`[CuAgent] 未连上编辑器插件(${this.config.codex.host}:${this.config.codex.port})，文件操作将走本地直写`);
+      }
+
       // Step 9: 启动 HTTP 服务（用于接收微信回调）
       this.startHttpServer();
 

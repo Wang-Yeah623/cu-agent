@@ -4,6 +4,10 @@ out/
 *.vsix
 *.js.map
 .wstest.cjs
+.deepseek-test.ts
+.deepseek-out/
+.e2e-full.ts
+.e2e-out/
 *.d.ts.map
 .env
 .env.local
