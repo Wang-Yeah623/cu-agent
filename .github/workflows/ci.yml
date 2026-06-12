@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: type-check + tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      - name: Test (with mock Hermes API)
+        shell: pwsh
+        run: |
+          $mock = Start-Process -FilePath "cmd.exe" -ArgumentList "/c","npx tsx tests/mock-hermes.ts" -PassThru -WindowStyle Hidden
+          $ok = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            try { $c = New-Object Net.Sockets.TcpClient; $c.Connect("127.0.0.1", 11434); $c.Close(); $ok = $true; break }
+            catch { Start-Sleep -Seconds 1 }
+          }
+          Write-Host "mock Hermes up: $ok"
+          npm test
+          $code = $LASTEXITCODE
+          if ($mock -and -not $mock.HasExited) { Stop-Process -Id $mock.Id -Force -ErrorAction SilentlyContinue }
+          exit $code
