@@ -14,6 +14,7 @@ import { CodexAdapter, TerminalAdapter, FileSystemAdapter } from "../executor";
 import { TASK_EXECUTION_TIMEOUT_MS, USER_INPUT_TIMEOUT_MS } from "../core/constants";
 import { PluginMethod } from "../core/protocol";
 import { StateMachine } from "./state-machine";
+import { StateStore } from "./state-store";
 import * as path from "path";
 
 export class ExecutionLoop extends EventEmitter {
@@ -36,6 +37,7 @@ export class ExecutionLoop extends EventEmitter {
   private terminal: TerminalAdapter;
   private fileSystem: FileSystemAdapter;
   private securityGate: SecurityGate;
+  private stateStore?: StateStore;
 
   constructor(
     hermesClient: HermesClient,
@@ -44,7 +46,8 @@ export class ExecutionLoop extends EventEmitter {
     codexAdapter: CodexAdapter,
     terminalAdapter: TerminalAdapter,
     fileSystemAdapter: FileSystemAdapter,
-    securityGate: SecurityGate
+    securityGate: SecurityGate,
+    stateStore?: StateStore
   ) {
     super();
     this.hermes = hermesClient;
@@ -54,6 +57,7 @@ export class ExecutionLoop extends EventEmitter {
     this.terminal = terminalAdapter;
     this.fileSystem = fileSystemAdapter;
     this.securityGate = securityGate;
+    this.stateStore = stateStore;
   }
 
   public async createProject(requirement: string, outputDir: string): Promise<Project> {
@@ -72,6 +76,7 @@ export class ExecutionLoop extends EventEmitter {
     this.lastActionOutput = "";
     this.lastActionResult = "";
     this.projectCreated = true;
+    this.persist();
     return this.project;
   }
 
@@ -169,6 +174,20 @@ export class ExecutionLoop extends EventEmitter {
       }
     }
     this.project.status = this.sm.state;
+    this.persist();
+  }
+
+  /** 把当前执行状态持久化到磁盘（尽力而为；未配置 stateStore 时为空操作） */
+  private persist(): void {
+    if (!this.stateStore || !this.projectCreated) return;
+    this.stateStore.save({
+      project: this.project,
+      tasks: this.tasks,
+      completedTasks: this.completedTasks,
+      currentTaskIndex: this.currentTaskIndex,
+      latestSnapshot: this.latestSnapshot,
+      savedAt: now().toISOString(),
+    });
   }
 
   // ===== Internal: Execution Loop =====
@@ -347,6 +366,7 @@ Project root: ${this.project.outputDir}`;
     });
     this.emit("progress:update", snapshot);
     this.latestSnapshot = snapshot;
+    this.persist();
     return snapshot;
   }
 

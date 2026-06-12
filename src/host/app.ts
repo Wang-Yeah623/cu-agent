@@ -28,6 +28,7 @@ import { CodexAdapter } from "../executor/codex-adapter";
 import { TerminalAdapter } from "../executor/terminal";
 import { FileSystemAdapter } from "../executor/filesystem";
 import { ExecutionLoop } from "../loop/execution-loop";
+import { StateStore } from "../loop/state-store";
 import { ClawbotBridge, ClawbotConfig } from "../wechat/bridge";
 import { MessageRouter } from "../wechat/message-handler";
 
@@ -148,6 +149,7 @@ export class CuAgentApp {
       const fileSystem = new FileSystemAdapter();
 
       // Step 5: 初始化执行循环器
+      const stateStore = new StateStore(this.config.workspace.projectsDir);
       const executionLoop = new ExecutionLoop(
         hermes,
         taskPlanner,
@@ -155,8 +157,14 @@ export class CuAgentApp {
         codexAdapter,
         terminal,
         fileSystem,
-        securityGate
+        securityGate,
+        stateStore
       );
+      // 启动时若发现上次项目状态，记录一条日志（就地续跑能力待后续实现）
+      const priorState = stateStore.load();
+      if (priorState) {
+        console.log(`[CuAgent] 发现上次项目状态：「${priorState.project?.name}」 进度 ${priorState.latestSnapshot?.percentage ?? "?"}%（状态 ${priorState.project?.status}）`);
+      }
 
       // Step 6: 初始化 WeChat 通信层
       const bridge = new ClawbotBridge(this.config.wechat);

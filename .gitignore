@@ -6,6 +6,10 @@ dist/
 .env.local
 projects/
 .cu-agent/
+.cu-agent-state.json
+.test-state/
+.test-projects/
+.demo-output/
 *.log
 .DS_Store
 Thumbs.db
