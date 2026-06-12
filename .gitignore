@@ -1,6 +1,9 @@
 node_modules/
 dist/
+out/
+*.vsix
 *.js.map
+.wstest.cjs
 *.d.ts.map
 .env
 .env.local

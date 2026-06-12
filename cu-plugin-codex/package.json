@@ -1,0 +1,54 @@
+{
+  "name": "cu-plugin-codex",
+  "displayName": "Cu Plugin for Codex",
+  "description": "Cu Agent 的编辑器侧插件：开一个本地 WebSocket 服务，接收 Cu Agent Host 的操控指令并在编辑器里执行。",
+  "version": "0.1.0",
+  "publisher": "cu-agent",
+  "private": true,
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cuAgent.showBindingKey",
+        "title": "Cu Agent: 显示绑定密钥"
+      },
+      {
+        "command": "cuAgent.showStatus",
+        "title": "Cu Agent: 显示插件状态"
+      }
+    ],
+    "configuration": {
+      "title": "Cu Agent Plugin",
+      "properties": {
+        "cuAgent.port": {
+          "type": "number",
+          "default": 9876,
+          "description": "Cu Plugin WebSocket 监听端口（需与 Host 的 CODEX_PLUGIN_PORT 一致）。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^20.12.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "ws": "^8.17.0"
+  }
+}
