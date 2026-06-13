@@ -95,6 +95,13 @@ setx CODEX_BINDING_KEY   "你的绑定密钥"
 node dist/main.js
 ```
 
+### 🌐 在浏览器里试 —— 免微信、免 VS Code
+
+```bash
+npm run demo     # 先设好上面的 HERMES_API_KEY
+# 打开 http://localhost:8787，输入需求，实时看它拆任务 + 写代码
+```
+
 想让 agent 操控 **VS Code**？见 [`cu-plugin-codex/`](cu-plugin-codex)：在该目录 `npm install`，按 **F5**，编辑器即在 `ws://127.0.0.1:9876` 接入。
 
 ## ⚙️ 配置

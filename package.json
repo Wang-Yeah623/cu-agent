@@ -11,7 +11,8 @@
     "watch": "tsc -w",
     "lint": "eslint src/",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "demo": "tsx web-demo/server.ts"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",

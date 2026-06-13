@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cu Agent · 网页 Demo</title>
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --panel2:#0b0f15; --border:#30363d;
+    --text:#e6edf3; --muted:#8b949e; --green:#07c160; --green2:#19d6a6;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; height:100vh; display:flex; flex-direction:column;
+    background:var(--bg); color:var(--text);
+    font-family:'Segoe UI','PingFang SC','Helvetica Neue',system-ui,sans-serif;
+  }
+  header {
+    display:flex; align-items:center; gap:14px; padding:14px 22px;
+    border-bottom:1px solid var(--border); background:linear-gradient(90deg,#0d1117,#161b22);
+  }
+  header .logo { font-size:20px; font-weight:800; letter-spacing:-.5px; }
+  header .logo span { color:var(--green2); }
+  header .tag { color:var(--muted); font-size:13px; }
+  header .model {
+    margin-left:auto; font-size:12px; color:var(--muted);
+    border:1px solid var(--border); border-radius:14px; padding:5px 12px; background:var(--panel);
+  }
+  header .model b { color:var(--green2); font-weight:600; }
+  main { flex:1; display:grid; grid-template-columns:minmax(360px,1fr) 1.3fr; min-height:0; }
+  .col { display:flex; flex-direction:column; min-height:0; }
+  .col.left { border-right:1px solid var(--border); }
+
+  /* chat */
+  .chat { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:88%; padding:10px 13px; border-radius:14px; font-size:14px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+  .msg.user { align-self:flex-end; background:var(--green); color:#06301c; border-bottom-right-radius:4px; font-weight:600; }
+  .msg.agent { align-self:flex-start; background:var(--panel); border:1px solid var(--border); border-bottom-left-radius:4px; }
+  .msg.log { align-self:flex-start; color:var(--muted); font-size:12px; font-family:ui-monospace,Consolas,monospace; background:transparent; padding:2px 4px; }
+  .progress-wrap { padding:0 18px 6px; }
+  .progress { height:8px; border-radius:6px; background:var(--panel); overflow:hidden; border:1px solid var(--border); }
+  .progress > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--green),var(--green2)); transition:width .5s; }
+  .progress-label { font-size:12px; color:var(--muted); margin:6px 2px 0; }
+
+  /* composer */
+  .composer { border-top:1px solid var(--border); padding:14px 18px; background:var(--panel); }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { font-size:12px; color:var(--muted); border:1px solid var(--border); border-radius:14px; padding:5px 11px; cursor:pointer; background:var(--bg); }
+  .chip:hover { border-color:var(--green); color:var(--green2); }
+  .row { display:flex; gap:10px; }
+  textarea {
+    flex:1; resize:none; height:46px; padding:12px 14px; border-radius:12px;
+    background:var(--bg); color:var(--text); border:1px solid var(--border); font-size:14px; font-family:inherit;
+  }
+  textarea:focus { outline:none; border-color:var(--green); }
+  button {
+    padding:0 22px; border:none; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer;
+    background:linear-gradient(90deg,var(--green),var(--green2)); color:#06301c;
+  }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+
+  /* files */
+  .col.right { background:var(--panel2); }
+  .files-head { padding:14px 18px; border-bottom:1px solid var(--border); font-size:13px; color:var(--muted); display:flex; align-items:center; gap:10px; }
+  .files-head b { color:var(--text); }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; padding:12px 14px 0; overflow-x:auto; }
+  .tab { font-size:12px; padding:5px 11px; border-radius:8px 8px 0 0; cursor:pointer; color:var(--muted); border:1px solid var(--border); border-bottom:none; background:var(--panel); white-space:nowrap; }
+  .tab.active { color:var(--green2); background:var(--panel2); }
+  pre.code {
+    flex:1; margin:0; overflow:auto; padding:16px 18px; font-size:13px; line-height:1.55;
+    font-family:ui-monospace,'Cascadia Code',Consolas,monospace; color:#c9d1d9; white-space:pre;
+  }
+  .empty { flex:1; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; text-align:center; padding:20px; }
+  .pill-live { font-size:11px; color:var(--green2); border:1px solid var(--green); border-radius:10px; padding:2px 8px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo">Cu <span>Agent</span></div>
+    <div class="tag">网页 Demo · 发条需求，看它写代码</div>
+    <div class="model" id="model">model: …</div>
+  </header>
+
+  <main>
+    <section class="col left">
+      <div class="chat" id="chat"></div>
+      <div class="progress-wrap" id="progressWrap" style="display:none">
+        <div class="progress"><i id="bar"></i></div>
+        <div class="progress-label" id="progressLabel">进度 0%</div>
+      </div>
+      <div class="composer">
+        <div class="chips" id="chips"></div>
+        <div class="row">
+          <textarea id="input" placeholder="例如：帮我做一个纯静态的 HTML 个人主页"></textarea>
+          <button id="run">▶ 运行</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="col right">
+      <div class="files-head">📁 <b>生成的文件</b> <span id="fileCount"></span> <span class="pill-live" id="live" style="display:none">running…</span></div>
+      <div class="tabs" id="tabs"></div>
+      <pre class="code" id="code" style="display:none"></pre>
+      <div class="empty" id="empty">运行后，agent 生成的文件会实时出现在这里 👀</div>
+    </section>
+  </main>
+
+<script>
+  const chat = document.getElementById('chat');
+  const runBtn = document.getElementById('run');
+  const input = document.getElementById('input');
+  const bar = document.getElementById('bar');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressLabel = document.getElementById('progressLabel');
+  const tabsEl = document.getElementById('tabs');
+  const codeEl = document.getElementById('code');
+  const emptyEl = document.getElementById('empty');
+  const fileCount = document.getElementById('fileCount');
+  const live = document.getElementById('live');
+
+  const examples = ["帮我做一个纯静态的 HTML 个人主页", "帮我做一个待办事项小工具（纯前端）", "帮我做一个产品落地页"];
+  const chips = document.getElementById('chips');
+  examples.forEach(t => { const c = document.createElement('div'); c.className='chip'; c.textContent=t; c.onclick=()=>{input.value=t;}; chips.appendChild(c); });
+
+  fetch('/api/config').then(r=>r.json()).then(c=>{
+    document.getElementById('model').innerHTML = 'model: <b>'+c.model+'</b>' + (c.hasKey?'':' ⚠️ 无 KEY');
+  }).catch(()=>{});
+
+  function addMsg(cls, text){ const d=document.createElement('div'); d.className='msg '+cls; d.textContent=text; chat.appendChild(d); chat.scrollTop=chat.scrollHeight; }
+
+  let files = [];
+  let active = null;
+  function renderFiles(){
+    fileCount.textContent = files.length ? '· '+files.length+' 个' : '';
+    if(!files.length){ emptyEl.style.display='flex'; codeEl.style.display='none'; tabsEl.innerHTML=''; return; }
+    emptyEl.style.display='none'; codeEl.style.display='block';
+    if(active===null || !files.find(f=>f.path===active)) active = files[files.length-1].path;
+    tabsEl.innerHTML='';
+    files.forEach(f=>{ const t=document.createElement('div'); t.className='tab'+(f.path===active?' active':''); t.textContent=f.path; t.onclick=()=>{active=f.path; renderFiles();}; tabsEl.appendChild(t); });
+    codeEl.textContent = (files.find(f=>f.path===active)||{}).content || '';
+  }
+
+  const es = new EventSource('/api/events');
+  es.addEventListener('reset', ()=>{ files=[]; active=null; renderFiles(); progressWrap.style.display='block'; bar.style.width='0'; progressLabel.textContent='进度 0%'; live.style.display='inline-block'; });
+  es.addEventListener('agent', e=> addMsg('agent', JSON.parse(e.data).text));
+  es.addEventListener('log', e=>{ const m=JSON.parse(e.data); if(m && m.message) addMsg('log','· '+m.message); });
+  es.addEventListener('progress', e=>{ const p=JSON.parse(e.data).pct||0; bar.style.width=p+'%'; progressLabel.textContent='进度 '+p+'%'; });
+  es.addEventListener('files', e=>{ files=JSON.parse(e.data).files||[]; renderFiles(); });
+  es.addEventListener('done', ()=>{ runBtn.disabled=false; runBtn.textContent='▶ 运行'; live.style.display='none'; });
+
+  function start(){
+    const req = (input.value||'').trim(); if(!req) return;
+    addMsg('user', req);
+    runBtn.disabled=true; runBtn.textContent='运行中…';
+    fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requirement:req})}).catch(()=>{});
+  }
+  runBtn.onclick = start;
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) start(); });
+</script>
+</body>
+</html>

@@ -96,6 +96,13 @@ setx CODEX_BINDING_KEY   "your-binding-key"
 node dist/main.js
 ```
 
+### 🌐 Try it in your browser — no WeChat, no VS Code needed
+
+```bash
+npm run demo     # after setting HERMES_API_KEY above
+# open http://localhost:8787 — type a requirement and watch it plan + write code live
+```
+
 Want the agent to drive **VS Code**? See [`cu-plugin-codex/`](cu-plugin-codex) — `npm install` there, press **F5**, and the editor connects on `ws://127.0.0.1:9876`.
 
 ## ⚙️ Configuration

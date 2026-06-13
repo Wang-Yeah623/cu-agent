@@ -8,6 +8,7 @@ out/
 .deepseek-out/
 .e2e-full.ts
 .e2e-out/
+.web-demo-out/
 *.d.ts.map
 .env
 .env.local
