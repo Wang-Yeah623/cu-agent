@@ -36,7 +36,15 @@
 
 ## 🎬 演示
 
-> 短视频马上补。下面是一次真实运行（模拟微信 ↔ Cu Agent，由 DeepSeek 驱动）：
+<p align="center">
+  <!-- 🎥 录好后：把 GIF 存成 assets/demo.gif，删掉下面这行占位图，取消注释再下一行。 -->
+  <img src="assets/demo-placeholder.svg" alt="Cu Agent 演示 —— 运行 npm run demo 录制" width="82%">
+  <!-- <img src="assets/demo.gif" alt="Cu Agent 实演" width="82%"> -->
+</p>
+
+<p align="center"><sub>📹 演示 GIF 马上补 —— 用 <code>npm run demo</code> 30 秒录一段 · <a href="assets/DEMO_SCRIPT.md">分镜脚本</a></sub></p>
+
+下面是一次真实运行（模拟微信 ↔ Cu Agent，由 DeepSeek 驱动）：
 
 ```text
 📱 你           帮我做一个个人博客网站

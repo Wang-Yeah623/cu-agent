@@ -36,7 +36,15 @@ Most AI coding agents chain you to an IDE, babysitting every step. **Cu Agent fl
 
 ## 🎬 Demo
 
-> A short screen-recording is on the way. Here's a real run (mock-WeChat ↔ Cu Agent, powered by DeepSeek):
+<p align="center">
+  <!-- 🎥 Recorded a clip? Save it as assets/demo.gif, delete the placeholder line below, and uncomment the next one. -->
+  <img src="assets/demo-placeholder.svg" alt="Cu Agent demo — run npm run demo to record" width="82%">
+  <!-- <img src="assets/demo.gif" alt="Cu Agent in action" width="82%"> -->
+</p>
+
+<p align="center"><sub>📹 Demo GIF coming soon — record your own in 30s with <code>npm run demo</code> · <a href="assets/DEMO_SCRIPT.md">shot list</a></sub></p>
+
+A real run meanwhile (mock-WeChat ↔ Cu Agent, powered by DeepSeek):
 
 ```text
 📱 You          帮我做一个个人博客网站
