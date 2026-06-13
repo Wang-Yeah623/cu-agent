@@ -8,6 +8,7 @@
 
 <p>
   <a href="https://github.com/Wang-Yeah623/cu-agent/actions/workflows/ci.yml"><img src="https://github.com/Wang-Yeah623/cu-agent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://wang-yeah623.github.io/cu-agent/"><img src="https://img.shields.io/badge/Live_site-7c5cff?logo=githubpages&logoColor=white" alt="Live site"></a>
   <img src="https://img.shields.io/badge/license-MIT-07C160" alt="MIT License">
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white" alt="Node >= 18">
